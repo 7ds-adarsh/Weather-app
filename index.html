@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather App with Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background-image: url("https://plus.unsplash.com/premium_photo-1675968514495-7f3be70dddd6?q=80&w=1316&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D");
+            background-size: cover;
+        }
+
+        .container {
+            padding: 20px;
+            text-align: center;
+        }
+
+        #map {
+            height: 400px;
+            width: 90%;
+            margin: 20px auto;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #00796b;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #004d40;
+        }
+
+        .weatherResults {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #f0f0f0;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .weatherResults h2 {
+            margin-top: 0;
+        }
+
+        .weatherResults p {
+            font-size: 16px;
+            color: #333;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Weather App</h1>
+        <p>Click below to load the map.</p>
+        <button onclick="showMap()">Show Map</button>
+        <div id="map"></div>
+    </div>
+
+    <div class="weatherResults">
+        <h2>Weather Information</h2>
+        <p>Weather data will be displayed here</p>
+        <!-- Weather data will be dynamically inserted here -->
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+        const API_KEY = "e589504595b274f6bc73914c7581509f";
+        let mapInitialized = false;
+        let map;
+        const weatherDataContainer = document.querySelector('.weatherResults');
+
+        // Show the map
+        function showMap() {
+            if (!mapInitialized) {
+                map = L.map('map').setView([28.6139, 77.2090], 10);
+
+                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
+                }).addTo(map);
+
+                mapInitialized = true;
+
+                // Listen for click events to fetch weather on click
+                map.on('click', handleMapClick);
+            }
+        }
+
+        // Handle map click: get city name via reverse geocoding, then fetch weather
+        function handleMapClick(e) {
+            const lat = e.latlng.lat;
+            const lon = e.latlng.lng;
+
+            const geocodeURL = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`;
+
+            fetch(geocodeURL)
+                .then(response => response.json())
+                .then(data => {
+                    const city = data.address.city || data.address.town || data.address.village;
+
+                    if (city) {
+                        fetchWeatherData(city);
+                    } else {
+                        weatherDataContainer.textContent = "No city found at this location.";
+                    }
+                })
+                .catch(error => console.error('Error fetching reverse geocoding data:', error));
+        }
+
+        // Fetch weather data from OpenWeatherMap API
+        function fetchWeatherData(city) {
+            const weatherURL = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=metric`;
+
+            fetch(weatherURL)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.cod === 200) {
+                        displayWeatherData(data);
+                    } else {
+                        alert("City not found!");
+                    }
+                })
+                .catch(error => console.error('Error fetching weather data:', error));
+        }
+
+        // Display the weather data in the HTML container
+        function displayWeatherData(data) {
+            weatherDataContainer.innerHTML = `
+        <h2>${data.name}, ${data.sys.country}</h2>
+        <p>Temperature: ${data.main.temp} °C</p>
+        <p>Weather: ${data.weather[0].description}</p>
+        <p>Humidity: ${data.main.humidity}%</p>
+        <p>Wind Speed: ${data.wind.speed} m/s</p>
+        <p>Pressure: ${data.main.pressure} hPa</p>
+        <p>Sunrise: ${new Date(data.sys.sunrise * 1000).toLocaleTimeString()}</p>
+        <p>Sunset: ${new Date(data.sys.sunset * 1000).toLocaleTimeString()}</p>
+    `;
+        }
+
+    </script>
+</body>
+
+</html>
