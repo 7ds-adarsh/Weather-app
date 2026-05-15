@@ -1,163 +1,618 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Weather App with Map</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    <style>
-        body,
-        html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            width: 100%;
-            font-family: Arial, sans-serif;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SkyCast — Weather by Map</title>
 
-        body {
-            background-image: url("https://plus.unsplash.com/premium_photo-1675968514495-7f3be70dddd6?q=80&w=1316&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D");
-            background-size: cover;
-        }
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=DM+Mono:wght@300;400;500&family=Outfit:wght@300;400;500&display=swap" rel="stylesheet" />
 
-        .container {
-            padding: 20px;
-            text-align: center;
-        }
+  <style>
+    :root {
+      --cyan: #00d4ff;
+      --cyan-dim: rgba(0, 212, 255, 0.15);
+      --glass: rgba(255, 255, 255, 0.06);
+      --glass-border: rgba(255, 255, 255, 0.12);
+      --text-muted: rgba(255, 255, 255, 0.45);
+      --amber: #ffb347;
+    }
 
-        #map {
-            height: 400px;
-            width: 90%;
-            margin: 20px auto;
-            border-radius: 8px;
-            border: 1px solid #ccc;
-        }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-        button {
-            padding: 10px 20px;
-            background-color: #00796b;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: #050c18;
+      color: #fff;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
 
-        button:hover {
-            background-color: #004d40;
-        }
+    /* ── Aurora Background ── */
+    .aurora {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+    }
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(100px);
+      opacity: 0.35;
+      animation: drift 18s ease-in-out infinite alternate;
+    }
+    .orb-1 { width: 600px; height: 600px; background: #0e4f8a; top: -200px; left: -150px; animation-delay: 0s; }
+    .orb-2 { width: 500px; height: 500px; background: #0a6b7c; top: 20%; right: -100px; animation-delay: -6s; }
+    .orb-3 { width: 700px; height: 700px; background: #1a2b5e; bottom: -250px; left: 30%; animation-delay: -12s; }
+    .orb-4 { width: 350px; height: 350px; background: #0d3d6e; top: 60%; left: 10%; animation-delay: -4s; }
 
-        .weatherResults {
-            margin-top: 20px;
-            padding: 20px;
-            background-color: #f0f0f0;
-            border-radius: 8px;
-            text-align: center;
-        }
+    @keyframes drift {
+      0%   { transform: translate(0, 0) scale(1); }
+      33%  { transform: translate(40px, -30px) scale(1.08); }
+      66%  { transform: translate(-20px, 50px) scale(0.95); }
+      100% { transform: translate(30px, 20px) scale(1.05); }
+    }
 
-        .weatherResults h2 {
-            margin-top: 0;
-        }
+    /* Subtle noise grain overlay */
+    .grain {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 256px;
+      pointer-events: none;
+    }
 
-        .weatherResults p {
-            font-size: 16px;
-            color: #333;
-        }
-    </style>
+    /* ── Layout ── */
+    .page {
+      position: relative;
+      z-index: 2;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      margin-bottom: 52px;
+      animation: fadeUp 0.8s ease both;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--cyan-dim);
+      border: 1px solid rgba(0,212,255,0.3);
+      border-radius: 999px;
+      padding: 5px 16px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--cyan);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 22px;
+    }
+    .badge-dot {
+      width: 6px; height: 6px;
+      background: var(--cyan);
+      border-radius: 50%;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.7); }
+    }
+    h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(52px, 8vw, 88px);
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      background: linear-gradient(135deg, #ffffff 30%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .tagline {
+      margin-top: 14px;
+      font-size: 16px;
+      color: var(--text-muted);
+      font-weight: 300;
+      letter-spacing: 0.02em;
+    }
+    .tagline em {
+      font-style: italic;
+      font-family: 'Playfair Display', serif;
+      color: rgba(255,255,255,0.65);
+    }
+
+    /* ── Glass Card ── */
+    .glass-card {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+
+    /* ── Map Section ── */
+    .map-section {
+      animation: fadeUp 0.8s 0.2s ease both;
+    }
+    .map-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px 0;
+    }
+    .map-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .show-map-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 22px;
+      background: linear-gradient(135deg, #007a91, #00c4e8);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-family: 'Outfit', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      box-shadow: 0 4px 20px rgba(0,196,232,0.3);
+      letter-spacing: 0.01em;
+    }
+    .show-map-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0,196,232,0.45);
+    }
+    .show-map-btn:active { transform: translateY(0); }
+    .show-map-btn svg { width: 16px; height: 16px; }
+
+    #map {
+      height: 420px;
+      width: 100%;
+      border-radius: 0 0 20px 20px;
+      margin-top: 16px;
+      display: block;
+    }
+
+    /* Map placeholder */
+    .map-placeholder {
+      height: 420px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      color: var(--text-muted);
+      margin-top: 16px;
+      border-top: 1px solid var(--glass-border);
+    }
+    .map-placeholder .globe {
+      font-size: 52px;
+      opacity: 0.4;
+      animation: float 4s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    .map-placeholder p { font-size: 14px; }
+
+    /* ── Weather Section ── */
+    #weather-section {
+      margin-top: 24px;
+      animation: fadeUp 0.6s ease both;
+    }
+
+    .weather-loading {
+      padding: 48px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 2px solid rgba(0,212,255,0.15);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .weather-card {
+      padding: 32px;
+    }
+    .weather-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .weather-location {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 8px;
+    }
+    .weather-temp {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(64px, 10vw, 96px);
+      font-weight: 900;
+      line-height: 1;
+      background: linear-gradient(135deg, var(--amber) 0%, #ff8c42 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .weather-desc {
+      font-size: 18px;
+      color: rgba(255,255,255,0.7);
+      font-weight: 300;
+      text-transform: capitalize;
+      margin-top: 4px;
+    }
+    .weather-icon-big {
+      font-size: 80px;
+      line-height: 1;
+      filter: drop-shadow(0 0 20px rgba(255,180,70,0.4));
+      animation: float 5s ease-in-out infinite;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--glass-border);
+      margin: 28px 0;
+    }
+
+    .weather-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 16px;
+    }
+    .stat-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 16px;
+      transition: background 0.2s;
+    }
+    .stat-card:hover { background: rgba(255,255,255,0.07); }
+    .stat-icon { font-size: 20px; margin-bottom: 8px; }
+    .stat-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 18px;
+      font-weight: 500;
+      color: #fff;
+    }
+    .stat-unit {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-left: 2px;
+    }
+
+    .sun-row {
+      display: flex;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .sun-card {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 16px;
+    }
+    .sun-card .sun-emoji { font-size: 26px; }
+    .sun-card .sun-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+    }
+    .sun-card .sun-time { font-size: 17px; font-weight: 500; color: #fff; }
+
+    /* ── Initial hint ── */
+    .hint-card {
+      padding: 48px 32px;
+      text-align: center;
+    }
+    .hint-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+    .hint-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 8px;
+    }
+    .hint-sub { font-size: 14px; color: var(--text-muted); }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      margin-top: 60px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: rgba(255,255,255,0.2);
+      letter-spacing: 0.08em;
+      animation: fadeUp 0.8s 0.4s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Leaflet overrides ── */
+    .leaflet-container { background: #0a1a2e; }
+    .leaflet-control-attribution { background: rgba(5,12,24,0.7) !important; color: rgba(255,255,255,0.4) !important; }
+    .leaflet-control-attribution a { color: var(--cyan) !important; }
+    .leaflet-bar a { background: rgba(10,26,46,0.9) !important; color: #fff !important; border-color: rgba(255,255,255,0.1) !important; }
+    .leaflet-bar a:hover { background: rgba(0,196,232,0.2) !important; }
+  </style>
 </head>
-
 <body>
-    <div class="container">
-        <h1>Weather App</h1>
-        <p>Click below to load the map.</p>
-        <button onclick="showMap()">Show Map</button>
-        <div id="map"></div>
+
+  <!-- Aurora background -->
+  <div class="aurora">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="orb orb-4"></div>
+  </div>
+  <div class="grain"></div>
+
+  <div class="page">
+
+    <!-- Header -->
+    <header>
+      <div class="badge">
+        <span class="badge-dot"></span>
+        Live Weather Data
+      </div>
+      <h1>SkyCast</h1>
+      <p class="tagline">
+        <em>Click anywhere on the map</em> — discover the sky above any place on Earth
+      </p>
+    </header>
+
+    <!-- Map Card -->
+    <div class="glass-card map-section">
+      <div class="map-header">
+        <span class="map-label">🌍 Interactive Globe</span>
+        <button class="show-map-btn" id="mapBtn" onclick="showMap()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          Show Map
+        </button>
+      </div>
+
+      <div id="map-placeholder" class="map-placeholder">
+        <div class="globe">🌐</div>
+        <p>Load the map to start exploring weather</p>
+      </div>
+      <div id="map" style="display:none;"></div>
     </div>
 
-    <div class="weatherResults">
-        <h2>Weather Information</h2>
-        <p>Weather data will be displayed here</p>
-        <!-- Weather data will be dynamically inserted here -->
+    <!-- Weather Output -->
+    <div id="weather-section">
+      <div class="glass-card">
+        <div class="hint-card">
+          <div class="hint-icon">🛰️</div>
+          <div class="hint-title">No location selected yet</div>
+          <div class="hint-sub">Load the map above and click on any city or region</div>
+        </div>
+      </div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script>
-        const API_KEY = "e589504595b274f6bc73914c7581509f";
-        let mapInitialized = false;
-        let map;
-        const weatherDataContainer = document.querySelector('.weatherResults');
+    <footer>
+      Powered by OpenWeatherMap · Leaflet · OpenStreetMap &nbsp;·&nbsp; SkyCast by 7ds-adarsh
+    </footer>
 
-        // Show the map
-        function showMap() {
-            if (!mapInitialized) {
-                map = L.map('map').setView([28.6139, 77.2090], 10);
+  </div>
 
-                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19,
-                    attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
-                }).addTo(map);
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    const API_KEY = "e589504595b274f6bc73914c7581509f";
+    let mapInitialized = false;
+    let map;
 
-                mapInitialized = true;
+    function getWeatherEmoji(main, desc) {
+      const m = main?.toLowerCase();
+      const d = desc?.toLowerCase() || '';
+      if (m === 'clear') return '☀️';
+      if (m === 'thunderstorm') return '⛈️';
+      if (m === 'drizzle') return '🌦️';
+      if (m === 'snow') return '🌨️';
+      if (m === 'rain') return d.includes('heavy') ? '🌧️' : '🌦️';
+      if (m === 'mist' || m === 'fog' || m === 'haze') return '🌫️';
+      if (m === 'smoke' || m === 'dust' || m === 'ash') return '🌫️';
+      if (m === 'squall' || m === 'tornado') return '🌪️';
+      if (m === 'clouds') {
+        if (d.includes('few') || d.includes('scattered')) return '🌤️';
+        if (d.includes('broken')) return '⛅';
+        return '☁️';
+      }
+      return '🌡️';
+    }
 
-                // Listen for click events to fetch weather on click
-                map.on('click', handleMapClick);
-            }
-        }
+    function showMap() {
+      if (mapInitialized) return;
 
-        // Handle map click: get city name via reverse geocoding, then fetch weather
-        function handleMapClick(e) {
-            const lat = e.latlng.lat;
-            const lon = e.latlng.lng;
+      document.getElementById('map-placeholder').style.display = 'none';
+      const mapEl = document.getElementById('map');
+      mapEl.style.display = 'block';
 
-            const geocodeURL = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`;
+      const btn = document.getElementById('mapBtn');
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg> Map Active`;
+      btn.style.background = 'linear-gradient(135deg, #1a4a2a, #2d7a3a)';
+      btn.style.boxShadow = '0 4px 20px rgba(45,122,58,0.4)';
+      btn.onclick = null;
 
-            fetch(geocodeURL)
-                .then(response => response.json())
-                .then(data => {
-                    const city = data.address.city || data.address.town || data.address.village;
+      map = L.map('map', { zoomControl: true }).setView([28.6139, 77.2090], 5);
 
-                    if (city) {
-                        fetchWeatherData(city);
-                    } else {
-                        weatherDataContainer.textContent = "No city found at this location.";
-                    }
-                })
-                .catch(error => console.error('Error fetching reverse geocoding data:', error));
-        }
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 19
+      }).addTo(map);
 
-        // Fetch weather data from OpenWeatherMap API
-        function fetchWeatherData(city) {
-            const weatherURL = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=metric`;
+      mapInitialized = true;
+      map.on('click', handleMapClick);
+    }
 
-            fetch(weatherURL)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.cod === 200) {
-                        displayWeatherData(data);
-                    } else {
-                        alert("City not found!");
-                    }
-                })
-                .catch(error => console.error('Error fetching weather data:', error));
-        }
+    let marker;
 
-        // Display the weather data in the HTML container
-        function displayWeatherData(data) {
-            weatherDataContainer.innerHTML = `
-        <h2>${data.name}, ${data.sys.country}</h2>
-        <p>Temperature: ${data.main.temp} °C</p>
-        <p>Weather: ${data.weather[0].description}</p>
-        <p>Humidity: ${data.main.humidity}%</p>
-        <p>Wind Speed: ${data.wind.speed} m/s</p>
-        <p>Pressure: ${data.main.pressure} hPa</p>
-        <p>Sunrise: ${new Date(data.sys.sunrise * 1000).toLocaleTimeString()}</p>
-        <p>Sunset: ${new Date(data.sys.sunset * 1000).toLocaleTimeString()}</p>
-    `;
-        }
+    function handleMapClick(e) {
+      const { lat, lng: lon } = e.latlng;
 
-    </script>
+      if (marker) map.removeLayer(marker);
+      marker = L.circleMarker([lat, lon], {
+        radius: 8, color: '#00d4ff', fillColor: '#00d4ff',
+        fillOpacity: 0.5, weight: 2
+      }).addTo(map);
+
+      showLoading();
+
+      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`)
+        .then(r => r.json())
+        .then(data => {
+          const city = data.address.city || data.address.town || data.address.village || data.address.county;
+          if (city) {
+            fetchWeatherData(city);
+          } else {
+            showError("No city found at this location.");
+          }
+        })
+        .catch(() => showError("Geocoding failed. Try another location."));
+    }
+
+    function showLoading() {
+      document.getElementById('weather-section').innerHTML = `
+        <div class="glass-card">
+          <div class="weather-loading">
+            <div class="spinner"></div>
+            <p style="font-family:'DM Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Fetching weather data…</p>
+          </div>
+        </div>`;
+    }
+
+    function showError(msg) {
+      document.getElementById('weather-section').innerHTML = `
+        <div class="glass-card">
+          <div class="hint-card">
+            <div class="hint-icon">⚠️</div>
+            <div class="hint-title" style="color:rgba(255,120,80,0.8)">${msg}</div>
+            <div class="hint-sub">Try clicking on a different spot on the map</div>
+          </div>
+        </div>`;
+    }
+
+    function fetchWeatherData(city) {
+      fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=metric`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.cod === 200) displayWeatherData(data);
+          else showError(`"${city}" not found in weather database.`);
+        })
+        .catch(() => showError("Weather fetch failed. Check your connection."));
+    }
+
+    function displayWeatherData(d) {
+      const emoji = getWeatherEmoji(d.weather[0].main, d.weather[0].description);
+      const sunrise = new Date(d.sys.sunrise * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const sunset  = new Date(d.sys.sunset  * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const temp    = Math.round(d.main.temp);
+      const feels   = Math.round(d.main.feels_like);
+
+      document.getElementById('weather-section').innerHTML = `
+        <div class="glass-card">
+          <div class="weather-card">
+
+            <div class="weather-top">
+              <div>
+                <div class="weather-location">📍 ${d.name}, ${d.sys.country}</div>
+                <div class="weather-temp">${temp}°</div>
+                <div class="weather-desc">${d.weather[0].description}</div>
+              </div>
+              <div class="weather-icon-big">${emoji}</div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="weather-grid">
+              <div class="stat-card">
+                <div class="stat-icon">🌡️</div>
+                <div class="stat-label">Feels Like</div>
+                <div class="stat-value">${feels}<span class="stat-unit">°C</span></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon">💧</div>
+                <div class="stat-label">Humidity</div>
+                <div class="stat-value">${d.main.humidity}<span class="stat-unit">%</span></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon">🌬️</div>
+                <div class="stat-label">Wind Speed</div>
+                <div class="stat-value">${d.wind.speed}<span class="stat-unit">m/s</span></div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon">🔵</div>
+                <div class="stat-label">Pressure</div>
+                <div class="stat-value">${d.main.pressure}<span class="stat-unit">hPa</span></div>
+              </div>
+            </div>
+
+            <div class="sun-row">
+              <div class="sun-card">
+                <div class="sun-emoji">🌅</div>
+                <div>
+                  <div class="sun-label">Sunrise</div>
+                  <div class="sun-time">${sunrise}</div>
+                </div>
+              </div>
+              <div class="sun-card">
+                <div class="sun-emoji">🌇</div>
+                <div>
+                  <div class="sun-label">Sunset</div>
+                  <div class="sun-time">${sunset}</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>`;
+    }
+  </script>
 </body>
-
 </html>
